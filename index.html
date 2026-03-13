@@ -1294,18 +1294,68 @@
             }, 2000);
         }
 
-        // 提取URL并按行分组（保留原始行文本，提取URL前的key）
+        // 提取URL并按组分组（以空行分隔，一组内的多个URL归为一组）
         function extractImageUrls(text) {
             const lines = text.split('\n');
             const result = [];
             let globalIndex = 0;
+            let currentGroup = null;
+            let groupLines = [];
 
-            lines.forEach((line, lineIndex) => {
-                const urls = [];
+            // 检测是否为记录分隔行（IP地址、日期时间等）
+            function isRecordSeparator(line) {
+                const trimmed = line.trim();
+                // IP地址格式
+                if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(trimmed)) {
+                    return true;
+                }
+                // 日期时间格式 (如: 2026-03-13, 03-13 17:16:32)
+                if (/^\d{2,4}-\d{2}-\d{2}/.test(trimmed)) {
+                    return true;
+                }
+                return false;
+            }
+
+            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                const line = lines[lineIndex];
+                const trimmedLine = line.trim();
+
+                // 空行表示一组结束
+                if (trimmedLine === '') {
+                    if (currentGroup && currentGroup.urls.length > 0) {
+                        currentGroup.originalText = groupLines.join('\n');
+                        result.push(currentGroup);
+                        currentGroup = null;
+                        groupLines = [];
+                    }
+                    continue;
+                }
+
+                // 如果当前组已有URL，并且遇到记录分隔行，结束当前组
+                if (currentGroup && currentGroup.urls.length > 0 && isRecordSeparator(line)) {
+                    currentGroup.originalText = groupLines.join('\n');
+                    result.push(currentGroup);
+                    currentGroup = null;
+                    groupLines = [];
+                }
+
+                // 检查当前行是否包含URL
                 const regex = new RegExp(imageUrlRegex);
                 let match;
+                let hasUrl = false;
 
                 while ((match = regex.exec(line)) !== null) {
+                    hasUrl = true;
+
+                    // 如果还没有当前组，创建一个
+                    if (!currentGroup) {
+                        currentGroup = {
+                            lineNumber: lineIndex + 1,
+                            originalText: '',
+                            urls: []
+                        };
+                    }
+
                     let url = match[0];
                     const urlStartIndex = match.index;
 
@@ -1325,21 +1375,24 @@
                         urlKey = keyMatch[1];
                     }
 
-                    urls.push({
+                    currentGroup.urls.push({
                         url: url,
-                        urlKey: urlKey, // 保存key
+                        urlKey: urlKey,
                         globalIndex: ++globalIndex
                     });
                 }
 
-                if (urls.length > 0) {
-                    result.push({
-                        lineNumber: lineIndex + 1,
-                        originalText: line.trim(), // 保存原始行文本
-                        urls: urls
-                    });
+                // 无论是否有URL，都把这行加入到组的原始文本中
+                if (currentGroup || hasUrl) {
+                    groupLines.push(line);
                 }
-            });
+            }
+
+            // 处理最后一组（如果存在）
+            if (currentGroup && currentGroup.urls.length > 0) {
+                currentGroup.originalText = groupLines.join('\n');
+                result.push(currentGroup);
+            }
 
             return result;
         }
@@ -1494,69 +1547,114 @@
                 toggleIcon.classList.toggle('collapsed');
             };
 
-            // 原始文本
-            const originalDiv = document.createElement('div');
-            originalDiv.className = 'row-kv-original';
+            // 从原始文本中提取 key-value 对
+            let text = group.originalText.replace(new RegExp(imageUrlRegex, 'g'), ''); // 移除URL
 
-            const label = document.createElement('div');
-            label.className = 'row-kv-label';
-            label.textContent = 'Key (原始文本)';
+            // 清理转义字符
+            text = text.replace(/\\n/g, ' ').replace(/\\"/g, '"').replace(/\\\\/g, '');
 
-            const text = document.createElement('div');
-            text.className = 'row-kv-text';
-            text.textContent = group.originalText;
+            // 提取所有 key: value 格式的数据
+            const kvPairs = [];
+            const seen = new Set(); // 避免重复
 
-            originalDiv.appendChild(label);
-            originalDiv.appendChild(text);
+            // 定义重要的key列表
+            const importantKeys = [
+                'trace_id', 'user_id', 'esScore', 'cosine',
+                'FaceComparisonScore', 'Passed', 'TransactionId',
+                'platform', 'country', 'device_id', 'app_version',
+                'status', 'result', 'score', 'model'
+            ];
 
-            // URLs列表
-            const urlsDiv = document.createElement('div');
-            const urlsLabel = document.createElement('div');
-            urlsLabel.className = 'row-kv-label';
-            urlsLabel.textContent = `Values (${group.urls.length} 个URL)`;
+            // 方法1: 匹配 JSON 格式的 "key": value
+            const jsonPattern = /"([^"]+)"\s*:\s*([^,}\n]+)/g;
+            let match;
+            while ((match = jsonPattern.exec(text)) !== null) {
+                let key = match[1].trim();
+                let value = match[2].trim();
 
-            const urlsList = document.createElement('div');
-            urlsList.className = 'row-kv-urls';
+                // 清理值中的引号和尾部符号
+                value = value.replace(/^["']|["']$/g, '').replace(/[,}\]]+$/, '').trim();
 
-            group.urls.forEach((urlData, idx) => {
-                const urlItem = document.createElement('div');
-                urlItem.className = 'row-kv-url-item';
+                // 跳过空值、太长的值、或包含特殊字符开头的值
+                if (!value || value.length > 100 || value.startsWith('{') || value.startsWith('[')) continue;
 
-                const urlIndex = document.createElement('div');
-                urlIndex.className = 'row-kv-url-index';
-                urlIndex.textContent = `URL ${idx + 1}`;
+                // 检查是否是重要的key
+                const isImportant = importantKeys.some(k => key.toLowerCase().includes(k.toLowerCase()));
+                if (!isImportant) continue;
 
-                const urlText = document.createElement('div');
-                urlText.className = 'row-kv-url-text';
-                // 如果有key，显示 "key: URL"，否则只显示URL
-                if (urlData.urlKey) {
-                    urlText.innerHTML = `<span style="color: #764ba2; font-weight: 600;">${urlData.urlKey}:</span> ${urlData.url}`;
-                } else {
-                    urlText.textContent = urlData.url;
-                }
-                urlText.title = urlData.url;
+                const kvKey = `${key}:${value}`;
+                if (seen.has(kvKey)) continue;
+                seen.add(kvKey);
 
-                const copyBtn = document.createElement('button');
-                copyBtn.className = 'row-kv-copy-btn';
-                copyBtn.textContent = '📋';
-                copyBtn.onclick = () => {
-                    // 只复制URL本身，不包含key
-                    navigator.clipboard.writeText(urlData.url).then(() => {
-                        showToast('✅ URL已复制');
-                    });
-                };
+                kvPairs.push({ key, value });
+            }
 
-                urlItem.appendChild(urlIndex);
-                urlItem.appendChild(urlText);
-                urlItem.appendChild(copyBtn);
-                urlsList.appendChild(urlItem);
+            // 方法2: 匹配普通格式 key: value (针对日志格式)
+            const normalPattern = /(\w+):\s*([^\s,}\]]+(?:\s+[^\s,}\]]+)*?)(?=\s+\w+:|$|,|\n)/g;
+            while ((match = normalPattern.exec(text)) !== null) {
+                let key = match[1].trim();
+                let value = match[2].trim();
+
+                // 清理值
+                value = value.replace(/^["']|["']$/g, '').replace(/[,}\]]+$/, '').trim();
+
+                // 跳过无效值
+                if (!value || value.length > 100 || value.includes('{')) continue;
+
+                // 检查是否是重要的key
+                const isImportant = importantKeys.some(k => key.toLowerCase().includes(k.toLowerCase()));
+                if (!isImportant) continue;
+
+                const kvKey = `${key}:${value}`;
+                if (seen.has(kvKey)) continue;
+                seen.add(kvKey);
+
+                kvPairs.push({ key, value });
+            }
+
+            // 按重要程度排序
+            kvPairs.sort((a, b) => {
+                const aImportance = importantKeys.indexOf(importantKeys.find(k => a.key.toLowerCase().includes(k.toLowerCase())) || '');
+                const bImportance = importantKeys.indexOf(importantKeys.find(k => b.key.toLowerCase().includes(k.toLowerCase())) || '');
+                return aImportance - bImportance;
             });
 
-            urlsDiv.appendChild(urlsLabel);
-            urlsDiv.appendChild(urlsList);
+            // 如果有提取到的 key-value 对，显示它们
+            if (kvPairs.length > 0) {
+                const kvList = document.createElement('div');
+                kvList.style.display = 'flex';
+                kvList.style.flexDirection = 'column';
+                kvList.style.gap = '6px';
 
-            content.appendChild(originalDiv);
-            content.appendChild(urlsDiv);
+                kvPairs.forEach(({ key, value }) => {
+                    const kvItem = document.createElement('div');
+                    kvItem.style.display = 'flex';
+                    kvItem.style.alignItems = 'center';
+                    kvItem.style.padding = '6px 10px';
+                    kvItem.style.background = 'white';
+                    kvItem.style.borderRadius = '5px';
+                    kvItem.style.borderLeft = '3px solid #667eea';
+                    kvItem.style.fontSize = '11px';
+                    kvItem.style.fontFamily = "'Monaco', 'Menlo', 'Consolas', monospace";
+
+                    const keySpan = document.createElement('span');
+                    keySpan.style.color = '#764ba2';
+                    keySpan.style.fontWeight = '600';
+                    keySpan.style.minWidth = '150px';
+                    keySpan.textContent = key + ':';
+
+                    const valueSpan = document.createElement('span');
+                    valueSpan.style.color = '#555';
+                    valueSpan.style.flex = '1';
+                    valueSpan.textContent = value;
+
+                    kvItem.appendChild(keySpan);
+                    kvItem.appendChild(valueSpan);
+                    kvList.appendChild(kvItem);
+                });
+
+                content.appendChild(kvList);
+            }
 
             section.appendChild(title);
             section.appendChild(content);
