@@ -1,0 +1,1977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image URL Viewer - 图片链接提取工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* 头部样式 */
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        /* 输入区域 */
+        .input-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+
+        #textInput {
+            flex: 1;
+            min-height: 200px;
+            padding: 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            resize: vertical;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            line-height: 1.6;
+        }
+
+        #textInput:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        #textInput::placeholder {
+            color: #999;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            white-space: nowrap;
+        }
+
+        #processBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-width: 120px;
+        }
+
+        #processBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        #clearBtn, #layoutBtn, #urlListBtn {
+            background: #f5f7fa;
+            color: #666;
+        }
+
+        #clearBtn:hover, #layoutBtn:hover, #urlListBtn:hover {
+            background: #e8ecef;
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .stats {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            color: #666;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .stats span {
+            color: #667eea;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        /* 展示区域 */
+        .display-section {
+            display: none;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .display-section.show {
+            display: block;
+        }
+
+        /* 全局控制面板 */
+        .global-controls {
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .global-controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 25px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .global-controls-header:hover {
+            background: #f8f9fa;
+        }
+
+        .global-controls-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .global-controls-toggle {
+            font-size: 14px;
+            color: #667eea;
+            transition: transform 0.3s ease;
+        }
+
+        .global-controls-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .global-controls-content {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            padding: 20px 30px;
+            max-height: 200px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+            opacity: 1;
+            flex-wrap: wrap;
+        }
+
+        .global-controls-content.collapsed {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            opacity: 0;
+        }
+
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .control-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            white-space: nowrap;
+        }
+
+        .control-input {
+            width: 80px;
+            padding: 8px 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+
+        .control-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .apply-btn {
+            padding: 10px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            white-space: nowrap;
+        }
+
+        .apply-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        /* 行容器布局 */
+        .rows-container {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(2, 1fr);
+            transition: all 0.3s ease;
+        }
+
+        .row-group {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 0;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            min-width: 0; /* 允许缩小 */
+        }
+
+        /* 格式化输出区域 */
+        .formatted-output {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .output-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .output-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .toggle-btn, .copy-all-btn {
+            padding: 6px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+
+        .toggle-btn:hover, .copy-all-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .copy-all-btn {
+            background: #f5f7fa;
+            color: #666;
+            border: 1px solid #e1e8ed;
+        }
+
+        .copy-all-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .output-content {
+            max-height: 500px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .output-content.collapsed {
+            display: none;
+        }
+
+        .kv-item {
+            background: white;
+            border-left: 4px solid #667eea;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+        }
+
+        .kv-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateX(2px);
+        }
+
+        .kv-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .kv-key {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .kv-line-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 60px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .kv-text {
+            flex: 1;
+            color: #555;
+            font-size: 13px;
+            line-height: 1.6;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            word-break: break-all;
+        }
+
+        .kv-values {
+            padding-left: 70px;
+        }
+
+        .kv-value-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            transition: background 0.2s;
+        }
+
+        .kv-value-item:hover {
+            background: #e8ecef;
+        }
+
+        .kv-value-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .kv-bullet {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .kv-url {
+            flex: 1;
+            color: #667eea;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .kv-copy-btn {
+            padding: 4px 10px;
+            background: white;
+            border: 1px solid #e1e8ed;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #666;
+            flex-shrink: 0;
+        }
+
+        .kv-copy-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* 自定义滚动条 */
+        .output-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .output-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .output-content::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+
+        .output-content::-webkit-scrollbar-thumb:hover {
+            background: #764ba2;
+        }
+
+        .row-group {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        /* 当在rows-container内时，调整padding和margin */
+        .rows-container .row-group {
+            padding: 15px;
+            margin-bottom: 0;
+        }
+
+        .row-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f0f0f0;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .row-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .row-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap;
+        }
+
+        .row-count {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .images-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .image-card {
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            background: #fafafa;
+            min-width: 0; /* 允许缩小 */
+        }
+
+        .image-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+            border-color: #667eea;
+        }
+
+        .image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 75%; /* 4:3 比例 */
+            background: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .image-wrapper img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+        }
+
+        .image-wrapper:hover img {
+            transform: scale(1.05);
+        }
+
+        .loading {
+            color: #999;
+            font-size: 12px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .error {
+            color: #e74c3c;
+            font-size: 11px;
+            padding: 8px;
+            text-align: center;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+        }
+
+        .image-info {
+            padding: 10px;
+            background: white;
+        }
+
+        .image-number {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .image-url {
+            font-size: 10px;
+            color: #666;
+            word-break: break-all;
+            line-height: 1.4;
+            max-height: 42px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .image-url a {
+            color: #667eea;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .image-url a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        .copy-btn {
+            margin-top: 6px;
+            padding: 5px 10px;
+            background: #f5f7fa;
+            border: 1px solid #e1e8ed;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .copy-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* 行内Key-Value展示 */
+        .row-kv-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .row-kv-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s;
+        }
+
+        .row-kv-title:hover {
+            color: #764ba2;
+        }
+
+        .row-kv-toggle-icon {
+            font-size: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .row-kv-toggle-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .row-kv-content {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px;
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+        }
+
+        .row-kv-content.collapsed {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            opacity: 0;
+        }
+
+        .row-kv-original {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e1e8ed;
+        }
+
+        .row-kv-label {
+            font-size: 10px;
+            color: #999;
+            font-weight: 600;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .row-kv-text {
+            font-size: 11px;
+            color: #555;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            line-height: 1.5;
+            word-break: break-all;
+        }
+
+        .row-kv-urls {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .row-kv-url-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: white;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+            transition: all 0.2s;
+        }
+
+        .row-kv-url-item:hover {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            transform: translateX(2px);
+        }
+
+        .row-kv-url-index {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            min-width: 40px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .row-kv-url-text {
+            flex: 1;
+            font-size: 10px;
+            color: #667eea;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .row-kv-copy-btn {
+            padding: 3px 8px;
+            background: #f5f7fa;
+            border: 1px solid #e1e8ed;
+            border-radius: 3px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #666;
+            flex-shrink: 0;
+        }
+
+        .row-kv-copy-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* 模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            animation: zoomIn 0.3s ease-out;
+        }
+
+        .close {
+            position: absolute;
+            top: 30px;
+            right: 45px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .close:hover {
+            color: #667eea;
+        }
+
+        #caption {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            padding: 15px 25px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 8px;
+            max-width: 80%;
+            word-break: break-all;
+            font-size: 14px;
+        }
+
+        /* Toast提示 */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #333;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 2000;
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes zoomIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8rem;
+            }
+
+            header p {
+                font-size: 0.95rem;
+            }
+
+            .input-section {
+                padding: 20px;
+            }
+
+            .input-wrapper {
+                flex-direction: column;
+            }
+
+            .button-group {
+                flex-direction: row;
+                width: 100%;
+            }
+
+            button {
+                flex: 1;
+            }
+
+            .global-controls-content {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .control-item {
+                width: 100%;
+            }
+
+            .apply-btn {
+                width: 100%;
+            }
+
+            .images-container {
+                grid-template-columns: 1fr;
+            }
+
+            .rows-container {
+                grid-template-columns: 1fr !important;
+            }
+
+            .close {
+                top: 15px;
+                right: 20px;
+                font-size: 30px;
+            }
+
+            #caption {
+                bottom: 15px;
+                font-size: 12px;
+            }
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        /* URL列表区域 */
+        .url-list-section {
+            display: none;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .url-list-section.show {
+            display: block;
+        }
+
+        .url-list-container {
+            background: white;
+            border-radius: 12px;
+            padding: 0;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .url-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 25px;
+            border-bottom: 2px solid #f0f0f0;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .url-list-header:hover {
+            background: #f8f9fa;
+        }
+
+        .url-list-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .url-list-toggle {
+            font-size: 14px;
+            color: #667eea;
+            transition: transform 0.3s ease;
+        }
+
+        .url-list-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .url-list-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .url-list-content {
+            max-height: 600px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            opacity: 1;
+        }
+
+        .url-list-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        .copy-all-btn {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .copy-all-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .url-table-wrapper {
+            padding: 25px;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+
+        .url-table-wrapper::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .url-table-wrapper::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .url-table-wrapper::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+
+        .url-table-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #764ba2;
+        }
+
+        .url-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .url-table thead {
+            background: #f8f9fa;
+        }
+
+        .url-table th {
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #666;
+            font-size: 14px;
+            border-bottom: 2px solid #e1e8ed;
+        }
+
+        .url-table th:first-child {
+            width: 100px;
+            border-top-left-radius: 8px;
+        }
+
+        .url-table th:last-child {
+            border-top-right-radius: 8px;
+        }
+
+        .url-table tbody tr {
+            transition: background-color 0.2s;
+        }
+
+        .url-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .url-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+        }
+
+        .url-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .url-table .url-index {
+            color: #667eea;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .url-table .url-value {
+            color: #333;
+            word-break: break-all;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            position: relative;
+        }
+
+        .url-table .url-value a {
+            color: #667eea;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .url-table .url-value a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        .url-row-copy {
+            margin-left: 10px;
+            padding: 2px 8px;
+            background: #f5f7fa;
+            border: 1px solid #e1e8ed;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #666;
+        }
+
+        .url-row-copy:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header>
+            <h1>🖼️ Image URL Viewer</h1>
+            <p>粘贴任意文本，自动提取并按行分组展示所有图片链接</p>
+        </header>
+
+        <!-- 输入区 -->
+        <section class="input-section">
+            <div class="input-wrapper">
+                <textarea id="textInput" placeholder="在这里粘贴包含图片URL的文本...
+
+支持格式：
+• https://example.com/image.jpg
+• http://cdn.example.com/photo.png
+• //static.example.com/pic.webp
+• ![alt](https://example.com/image.gif)
+
+提示：同一行的多个图片会展示在一起方便对比！"></textarea>
+                <div class="button-group">
+                    <button id="processBtn">🚀 提取并展示</button>
+                    <button id="clearBtn">🗑️ 清空</button>
+                    <button id="layoutBtn">⚙️ 布局设置</button>
+                    <button id="urlListBtn">📋 URL列表</button>
+                </div>
+            </div>
+            <div class="stats">检测到 <span id="urlCount">0</span> 个图片URL</div>
+        </section>
+
+        <!-- 展示区 -->
+        <section id="displaySection" class="display-section">
+            <!-- 动态生成的内容 -->
+        </section>
+
+        <!-- URL列表区 -->
+        <section id="urlListSection" class="url-list-section">
+            <div class="url-list-container">
+                <div class="url-list-header" onclick="toggleUrlList()">
+                    <div class="url-list-title">
+                        <span id="urlListToggle" class="url-list-toggle collapsed">▼</span>
+                        <span>📋 提取的URL列表</span>
+                    </div>
+                    <div class="url-list-actions">
+                        <button id="copyAllUrlsBtn" class="copy-all-btn" onclick="event.stopPropagation(); copyAllUrls();">📋 复制全部</button>
+                    </div>
+                </div>
+                <div id="urlListContent" class="url-list-content collapsed">
+                    <div class="url-table-wrapper">
+                        <table class="url-table">
+                            <thead>
+                                <tr>
+                                    <th>序号</th>
+                                    <th>URL地址</th>
+                                </tr>
+                            </thead>
+                            <tbody id="urlTableBody">
+                                <!-- 动态生成的内容 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 图片预览模态框 -->
+    <div id="imageModal" class="modal">
+        <span class="close">&times;</span>
+        <img class="modal-content" id="modalImage" alt="预览图片">
+        <div id="caption"></div>
+    </div>
+
+    <script>
+        // DOM元素
+        const textInput = document.getElementById('textInput');
+        const processBtn = document.getElementById('processBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const layoutBtn = document.getElementById('layoutBtn');
+        const urlListBtn = document.getElementById('urlListBtn');
+        const urlCount = document.getElementById('urlCount');
+        const displaySection = document.getElementById('displaySection');
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+        const caption = document.getElementById('caption');
+        const closeModal = document.querySelector('.close');
+
+        // 全局布局配置
+        let rowsPerLine = 2;  // 一行展示几组数据
+        let imagesPerRow = 2; // 每组内图片每行几个
+
+        // URL提取正则 - 匹配多种图片URL格式
+        const imageUrlRegex = /(?:!\[.*?\]\()?(?:https?:)?\/\/[^\s<>"{}|\\^`\[\]()]+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|ico)(?:\?[^\s<>"{}|\\^`\[\]()]*)?(?:\))?/gi;
+
+        // 显示Toast提示
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideInRight 0.3s ease-out reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 2000);
+        }
+
+        // 提取URL并按行分组（保留原始行文本，提取URL前的key）
+        function extractImageUrls(text) {
+            const lines = text.split('\n');
+            const result = [];
+            let globalIndex = 0;
+
+            lines.forEach((line, lineIndex) => {
+                const urls = [];
+                const regex = new RegExp(imageUrlRegex);
+                let match;
+
+                while ((match = regex.exec(line)) !== null) {
+                    let url = match[0];
+                    const urlStartIndex = match.index;
+
+                    // 清理Markdown格式
+                    url = url.replace(/^!\[.*?\]\(/, '').replace(/\)$/, '');
+                    // 补全协议
+                    if (url.startsWith('//')) {
+                        url = 'https:' + url;
+                    }
+
+                    // 提取URL前面的key（如 sourceUrl:, targetUrl: 等）
+                    let urlKey = '';
+                    const beforeUrl = line.substring(0, urlStartIndex);
+                    // 匹配最后一个单词加冒号的模式，如 "sourceUrl:", "url:", "image:" 等
+                    const keyMatch = beforeUrl.match(/(\w+)\s*:\s*$/);
+                    if (keyMatch) {
+                        urlKey = keyMatch[1];
+                    }
+
+                    urls.push({
+                        url: url,
+                        urlKey: urlKey, // 保存key
+                        globalIndex: ++globalIndex
+                    });
+                }
+
+                if (urls.length > 0) {
+                    result.push({
+                        lineNumber: lineIndex + 1,
+                        originalText: line.trim(), // 保存原始行文本
+                        urls: urls
+                    });
+                }
+            });
+
+            return result;
+        }
+
+        // 创建全局控制面板
+        function createGlobalControls() {
+            const controls = document.createElement('div');
+            controls.className = 'global-controls';
+
+            // 创建标题栏
+            const header = document.createElement('div');
+            header.className = 'global-controls-header';
+
+            const title = document.createElement('div');
+            title.className = 'global-controls-title';
+
+            const toggleIcon = document.createElement('span');
+            toggleIcon.className = 'global-controls-toggle collapsed';
+            toggleIcon.textContent = '▼';
+
+            const titleText = document.createElement('span');
+            titleText.textContent = '⚙️ 布局设置';
+
+            title.appendChild(toggleIcon);
+            title.appendChild(titleText);
+
+            header.appendChild(title);
+
+            // 创建内容区
+            const content = document.createElement('div');
+            content.className = 'global-controls-content collapsed';
+
+            // 一行展示几组
+            const item1 = document.createElement('div');
+            item1.className = 'control-item';
+
+            const label1 = document.createElement('div');
+            label1.className = 'control-label';
+            label1.textContent = '📐 一行展示组数:';
+
+            const input1 = document.createElement('input');
+            input1.className = 'control-input';
+            input1.type = 'number';
+            input1.min = '1';
+            input1.max = '6';
+            input1.value = rowsPerLine;
+            input1.id = 'rowsPerLineInput';
+
+            item1.appendChild(label1);
+            item1.appendChild(input1);
+
+            // 每组图片列数
+            const item2 = document.createElement('div');
+            item2.className = 'control-item';
+
+            const label2 = document.createElement('div');
+            label2.className = 'control-label';
+            label2.textContent = '🖼️ 每组图片列数:';
+
+            const input2 = document.createElement('input');
+            input2.className = 'control-input';
+            input2.type = 'number';
+            input2.min = '1';
+            input2.max = '6';
+            input2.value = imagesPerRow;
+            input2.id = 'imagesPerRowInput';
+
+            item2.appendChild(label2);
+            item2.appendChild(input2);
+
+            // 应用按钮
+            const applyBtn = document.createElement('button');
+            applyBtn.className = 'apply-btn';
+            applyBtn.textContent = '✓ 应用布局';
+            applyBtn.onclick = applyLayoutSettings;
+
+            content.appendChild(item1);
+            content.appendChild(item2);
+            content.appendChild(applyBtn);
+
+            controls.appendChild(header);
+            controls.appendChild(content);
+
+            // 点击标题栏切换展开/收起
+            header.addEventListener('click', () => {
+                content.classList.toggle('collapsed');
+                toggleIcon.classList.toggle('collapsed');
+            });
+
+            return controls;
+        }
+
+        // 应用布局设置
+        function applyLayoutSettings() {
+            const input1 = document.getElementById('rowsPerLineInput');
+            const input2 = document.getElementById('imagesPerRowInput');
+
+            const newRowsPerLine = parseInt(input1.value) || 2;
+            const newImagesPerRow = parseInt(input2.value) || 2;
+
+            // 验证范围
+            if (newRowsPerLine < 1 || newRowsPerLine > 6) {
+                showToast('⚠️ 一行组数范围: 1-6');
+                return;
+            }
+            if (newImagesPerRow < 1 || newImagesPerRow > 6) {
+                showToast('⚠️ 图片列数范围: 1-6');
+                return;
+            }
+
+            rowsPerLine = newRowsPerLine;
+            imagesPerRow = newImagesPerRow;
+
+            // 更新布局
+            const rowsContainer = document.querySelector('.rows-container');
+            if (rowsContainer) {
+                rowsContainer.style.gridTemplateColumns = `repeat(${rowsPerLine}, 1fr)`;
+            }
+
+            // 更新所有图片容器
+            document.querySelectorAll('.images-container').forEach(container => {
+                container.style.gridTemplateColumns = `repeat(${imagesPerRow}, 1fr)`;
+            });
+
+            showToast(`✅ 布局已更新: ${rowsPerLine}组/行, ${imagesPerRow}图/行`);
+        }
+
+        // 创建行内Key-Value展示
+        function createRowKVSection(group, index) {
+            const section = document.createElement('div');
+            section.className = 'row-kv-section';
+
+            const title = document.createElement('div');
+            title.className = 'row-kv-title';
+
+            const toggleIcon = document.createElement('span');
+            toggleIcon.className = 'row-kv-toggle-icon collapsed';
+            toggleIcon.textContent = '▼';
+
+            const titleText = document.createElement('span');
+            titleText.textContent = '📋 数据详情';
+
+            title.appendChild(toggleIcon);
+            title.appendChild(titleText);
+
+            const content = document.createElement('div');
+            content.className = 'row-kv-content collapsed'; // 默认折叠
+
+            // 点击标题切换展开/收起
+            title.onclick = () => {
+                content.classList.toggle('collapsed');
+                toggleIcon.classList.toggle('collapsed');
+            };
+
+            // 原始文本
+            const originalDiv = document.createElement('div');
+            originalDiv.className = 'row-kv-original';
+
+            const label = document.createElement('div');
+            label.className = 'row-kv-label';
+            label.textContent = 'Key (原始文本)';
+
+            const text = document.createElement('div');
+            text.className = 'row-kv-text';
+            text.textContent = group.originalText;
+
+            originalDiv.appendChild(label);
+            originalDiv.appendChild(text);
+
+            // URLs列表
+            const urlsDiv = document.createElement('div');
+            const urlsLabel = document.createElement('div');
+            urlsLabel.className = 'row-kv-label';
+            urlsLabel.textContent = `Values (${group.urls.length} 个URL)`;
+
+            const urlsList = document.createElement('div');
+            urlsList.className = 'row-kv-urls';
+
+            group.urls.forEach((urlData, idx) => {
+                const urlItem = document.createElement('div');
+                urlItem.className = 'row-kv-url-item';
+
+                const urlIndex = document.createElement('div');
+                urlIndex.className = 'row-kv-url-index';
+                urlIndex.textContent = `URL ${idx + 1}`;
+
+                const urlText = document.createElement('div');
+                urlText.className = 'row-kv-url-text';
+                // 如果有key，显示 "key: URL"，否则只显示URL
+                if (urlData.urlKey) {
+                    urlText.innerHTML = `<span style="color: #764ba2; font-weight: 600;">${urlData.urlKey}:</span> ${urlData.url}`;
+                } else {
+                    urlText.textContent = urlData.url;
+                }
+                urlText.title = urlData.url;
+
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'row-kv-copy-btn';
+                copyBtn.textContent = '📋';
+                copyBtn.onclick = () => {
+                    // 只复制URL本身，不包含key
+                    navigator.clipboard.writeText(urlData.url).then(() => {
+                        showToast('✅ URL已复制');
+                    });
+                };
+
+                urlItem.appendChild(urlIndex);
+                urlItem.appendChild(urlText);
+                urlItem.appendChild(copyBtn);
+                urlsList.appendChild(urlItem);
+            });
+
+            urlsDiv.appendChild(urlsLabel);
+            urlsDiv.appendChild(urlsList);
+
+            content.appendChild(originalDiv);
+            content.appendChild(urlsDiv);
+
+            section.appendChild(title);
+            section.appendChild(content);
+
+            return section;
+        }
+
+        // 创建图片卡片
+        function createImageCard(urlData) {
+            const card = document.createElement('div');
+            card.className = 'image-card';
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'image-wrapper';
+
+            const loading = document.createElement('div');
+            loading.className = 'loading';
+            loading.textContent = '加载中';
+            wrapper.appendChild(loading);
+
+            const img = document.createElement('img');
+            img.style.display = 'none';
+
+            img.onload = function() {
+                loading.remove();
+                img.style.display = 'block';
+            };
+
+            img.onerror = function() {
+                loading.remove();
+                const error = document.createElement('div');
+                error.className = 'error';
+                error.textContent = '❌ 加载失败';
+                wrapper.appendChild(error);
+            };
+
+            img.src = urlData.url;
+            img.alt = `Image ${urlData.globalIndex}`;
+            wrapper.appendChild(img);
+
+            // 点击放大
+            wrapper.addEventListener('click', () => {
+                modal.classList.add('show');
+                modalImg.src = urlData.url;
+                caption.textContent = urlData.url;
+            });
+
+            const info = document.createElement('div');
+            info.className = 'image-info';
+
+            const number = document.createElement('span');
+            number.className = 'image-number';
+            // 如果有urlKey，显示 "图片 1 - sourceUrl"，否则只显示 "图片 1"
+            if (urlData.urlKey) {
+                number.innerHTML = `图片 ${urlData.globalIndex} <span style="color: #fff; opacity: 0.9;">- ${urlData.urlKey}</span>`;
+            } else {
+                number.textContent = `图片 ${urlData.globalIndex}`;
+            }
+
+            const urlDiv = document.createElement('div');
+            urlDiv.className = 'image-url';
+            const link = document.createElement('a');
+            link.href = urlData.url;
+            link.target = '_blank';
+            link.textContent = urlData.url;
+            urlDiv.appendChild(link);
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn';
+            copyBtn.textContent = '📋 复制链接';
+            copyBtn.onclick = (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(urlData.url).then(() => {
+                    showToast('✅ 链接已复制');
+                });
+            };
+
+            info.appendChild(number);
+            info.appendChild(urlDiv);
+            info.appendChild(copyBtn);
+
+            card.appendChild(wrapper);
+            card.appendChild(info);
+
+            return card;
+        }
+
+        // 渲染展示区域
+        function renderDisplay(groupedData) {
+            displaySection.innerHTML = '';
+
+            if (groupedData.length === 0) {
+                displaySection.innerHTML = `
+                    <div class="row-group">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🔍</div>
+                            <p>未检测到图片URL，请检查输入内容</p>
+                        </div>
+                    </div>
+                `;
+                displaySection.classList.add('show');
+                return;
+            }
+
+            // 添加全局控制面板（默认隐藏）
+            const globalControls = createGlobalControls();
+            globalControls.style.display = 'none';
+            displaySection.appendChild(globalControls);
+
+            // 创建行容器
+            const rowsContainer = document.createElement('div');
+            rowsContainer.className = 'rows-container';
+            rowsContainer.style.gridTemplateColumns = `repeat(${rowsPerLine}, 1fr)`;
+
+            // 添加所有row-group
+            groupedData.forEach((group, index) => {
+                const rowGroup = document.createElement('div');
+                rowGroup.className = 'row-group';
+
+                const header = document.createElement('div');
+                header.className = 'row-header';
+
+                const headerLeft = document.createElement('div');
+                headerLeft.className = 'row-header-left';
+
+                const title = document.createElement('div');
+                title.className = 'row-title';
+                title.textContent = `📍 第 ${index + 1} 行`;
+
+                const count = document.createElement('span');
+                count.className = 'row-count';
+                count.textContent = `${group.urls.length} 张`;
+
+                headerLeft.appendChild(title);
+                headerLeft.appendChild(count);
+                header.appendChild(headerLeft);
+
+                // 图片容器
+                const container = document.createElement('div');
+                container.className = 'images-container';
+                container.style.gridTemplateColumns = `repeat(${imagesPerRow}, 1fr)`;
+
+                group.urls.forEach(urlData => {
+                    container.appendChild(createImageCard(urlData));
+                });
+
+                rowGroup.appendChild(header);
+                rowGroup.appendChild(container);
+
+                // 添加行内Key-Value展示
+                rowGroup.appendChild(createRowKVSection(group, index));
+
+                rowsContainer.appendChild(rowGroup);
+            });
+
+            displaySection.appendChild(rowsContainer);
+            displaySection.classList.add('show');
+
+            // 渲染URL列表
+            renderUrlList(groupedData);
+
+            // 平滑滚动到结果区域
+            setTimeout(() => {
+                displaySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+        // 渲染URL列表
+        function renderUrlList(groupedData) {
+            const urlListSection = document.getElementById('urlListSection');
+            const urlListContainer = urlListSection.querySelector('.url-list-container');
+
+            if (groupedData.length === 0) {
+                urlListSection.classList.remove('show');
+                return;
+            }
+
+            // 收集所有URL
+            const allUrls = [];
+            groupedData.forEach((group, groupIdx) => {
+                group.urls.forEach((urlData, urlIdx) => {
+                    // 如果有明确的urlKey就用urlKey，否则用 "第X行-第Y张" 的格式
+                    let displayKey = urlData.urlKey;
+                    if (!displayKey) {
+                        if (group.urls.length > 1) {
+                            // 同一行有多张图片，显示 "第X行-第Y张"
+                            displayKey = `第${groupIdx + 1}行-第${urlIdx + 1}张`;
+                        } else {
+                            // 同一行只有一张图片，显示 "第X行"
+                            displayKey = `第${groupIdx + 1}行`;
+                        }
+                    }
+
+                    allUrls.push({
+                        index: urlData.globalIndex,
+                        key: displayKey,
+                        url: urlData.url
+                    });
+                });
+            });
+
+            // 生成表格内容
+            const urlTableBody = document.getElementById('urlTableBody');
+            urlTableBody.innerHTML = '';
+
+            allUrls.forEach(item => {
+                const row = document.createElement('tr');
+
+                const indexCell = document.createElement('td');
+                indexCell.className = 'url-index';
+                indexCell.textContent = item.key;
+
+                const urlCell = document.createElement('td');
+                urlCell.className = 'url-value';
+
+                const link = document.createElement('a');
+                link.href = item.url;
+                link.target = '_blank';
+                link.textContent = item.url;
+
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'url-row-copy';
+                copyBtn.textContent = '复制';
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(item.url).then(() => {
+                        showToast('✅ URL已复制');
+                    });
+                };
+
+                urlCell.appendChild(link);
+                urlCell.appendChild(copyBtn);
+
+                row.appendChild(indexCell);
+                row.appendChild(urlCell);
+                urlTableBody.appendChild(row);
+            });
+
+            urlListSection.classList.add('show');
+            // 默认隐藏URL列表区域
+            urlListSection.style.display = 'none';
+        }
+
+        // 复制全部URL按钮
+        function copyAllUrls() {
+            const rows = document.getElementById('urlTableBody').querySelectorAll('tr');
+            const urls = Array.from(rows).map(row => {
+                const link = row.querySelector('.url-value a');
+                return link ? link.textContent : '';
+            }).filter(url => url);
+
+            if (urls.length === 0) {
+                showToast('⚠️ 没有URL可复制');
+                return;
+            }
+
+            const allUrlsText = urls.join('\n');
+            navigator.clipboard.writeText(allUrlsText).then(() => {
+                showToast(`✅ 已复制 ${urls.length} 个URL`);
+            });
+        }
+
+        // 切换URL列表展开/收起
+        function toggleUrlList() {
+            const content = document.getElementById('urlListContent');
+            const toggle = document.getElementById('urlListToggle');
+            content.classList.toggle('collapsed');
+            toggle.classList.toggle('collapsed');
+        }
+
+        // 预处理按钮
+        processBtn.addEventListener('click', () => {
+            const text = textInput.value.trim();
+
+            if (!text) {
+                showToast('⚠️ 请先输入文本内容');
+                return;
+            }
+
+            const groupedUrls = extractImageUrls(text);
+            const totalCount = groupedUrls.reduce((sum, group) => sum + group.urls.length, 0);
+
+            urlCount.textContent = totalCount;
+
+            if (totalCount === 0) {
+                showToast('⚠️ 未检测到图片URL');
+            } else {
+                showToast(`✅ 成功提取 ${totalCount} 个图片URL`);
+            }
+
+            renderDisplay(groupedUrls);
+        });
+
+        // 清空按钮
+        clearBtn.addEventListener('click', () => {
+            textInput.value = '';
+            urlCount.textContent = '0';
+            displaySection.innerHTML = '';
+            displaySection.classList.remove('show');
+            urlListSection.classList.remove('show');
+            showToast('🗑️ 已清空');
+        });
+
+        // 实时统计URL数量
+        textInput.addEventListener('input', () => {
+            const text = textInput.value.trim();
+            if (!text) {
+                urlCount.textContent = '0';
+                return;
+            }
+
+            const groupedUrls = extractImageUrls(text);
+            const totalCount = groupedUrls.reduce((sum, group) => sum + group.urls.length, 0);
+            urlCount.textContent = totalCount;
+        });
+
+        // 关闭模态框
+        closeModal.addEventListener('click', () => {
+            modal.classList.remove('show');
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('show');
+            }
+        });
+
+        // ESC键关闭模态框
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('show')) {
+                modal.classList.remove('show');
+            }
+        });
+
+        // 支持Ctrl/Cmd + Enter快捷键处理
+        textInput.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                processBtn.click();
+            }
+        });
+
+        // 布局设置按钮
+        layoutBtn.addEventListener('click', () => {
+            const globalControls = document.querySelector('.global-controls');
+            if (globalControls) {
+                const content = globalControls.querySelector('.global-controls-content');
+                const toggle = globalControls.querySelector('.global-controls-toggle');
+
+                // 检查是否已隐藏
+                if (globalControls.style.display === 'none') {
+                    // 显示并展开
+                    globalControls.style.display = '';
+                    content.classList.remove('collapsed');
+                    toggle.classList.remove('collapsed');
+                    // 滚动到它
+                    setTimeout(() => {
+                        globalControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                } else {
+                    // 如果已展开，则收起并隐藏
+                    const isCollapsed = content.classList.contains('collapsed');
+
+                    if (isCollapsed) {
+                        // 如果已收起，则展开
+                        content.classList.remove('collapsed');
+                        toggle.classList.remove('collapsed');
+                        setTimeout(() => {
+                            globalControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                    } else {
+                        // 如果已展开，则隐藏整个框
+                        globalControls.style.display = 'none';
+                    }
+                }
+            } else {
+                showToast('⚠️ 请先提取图片后再设置布局');
+            }
+        });
+
+        // URL列表按钮
+        urlListBtn.addEventListener('click', () => {
+            const urlListSection = document.getElementById('urlListSection');
+            if (urlListSection.classList.contains('show')) {
+                const content = document.getElementById('urlListContent');
+                const toggle = document.getElementById('urlListToggle');
+
+                // 检查是否已隐藏
+                if (urlListSection.style.display === 'none') {
+                    // 显示并展开
+                    urlListSection.style.display = '';
+                    content.classList.remove('collapsed');
+                    toggle.classList.remove('collapsed');
+                    // 滚动到它
+                    setTimeout(() => {
+                        urlListSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                } else {
+                    // 如果已展开，则收起并隐藏
+                    const isCollapsed = content.classList.contains('collapsed');
+
+                    if (isCollapsed) {
+                        // 如果已收起，则展开
+                        content.classList.remove('collapsed');
+                        toggle.classList.remove('collapsed');
+                        setTimeout(() => {
+                            urlListSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                    } else {
+                        // 如果已展开，则隐藏整个框
+                        urlListSection.style.display = 'none';
+                    }
+                }
+            } else {
+                showToast('⚠️ 请先提取图片后再查看URL列表');
+            }
+        });
+    </script>
+</body>
+</html>
